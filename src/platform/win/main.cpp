@@ -984,6 +984,62 @@ void vrCompose() {}
 
 #endif // #ifdef VR_SUPPORT
 
+#include <locale.h>
+#include <vector>
+
+class ArgVector {
+    std::vector<std::string> sargv;
+    std::vector<char*> pargv;
+
+public:
+    ArgVector() {
+        setlocale(LC_ALL, "C.UTF8");
+        int argc;
+        LPWSTR* wargv = CommandLineToArgvW(GetCommandLineW(), &argc);
+        sargv.resize(argc);
+        pargv.reserve(argc + 1);
+        pargv[argc] = 0;
+
+        for (int i = 0; i < argc; ++i) {
+            int len = WideCharToMultiByte(
+                CP_UTF8,
+                0,
+                wargv[i],
+                -1,
+                0,
+                0,
+                0,
+                0
+            );
+
+            sargv[i].reserve(len);
+
+            WideCharToMultiByte(
+                CP_UTF8,
+                0,
+                wargv[i],
+                -1,
+                sargv[i].data(),
+                len,
+                0,
+                0
+            );
+
+            pargv[i] = sargv[i].data();
+        }
+    }
+
+    int argc() {
+        return sargv.size();
+    }
+
+    char** argv() {
+        return &pargv[0];
+    }
+};
+
+#include "cmdline.h"
+
 #ifdef _DEBUG
 int main(int argc, char** argv) {
     _CrtMemState _msBegin, _msEnd, _msDiff;
@@ -995,8 +1051,11 @@ int main(int argc, char** argv) {
 int main(int argc, char** argv) {
 #else
 int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
-    int argc = (lpCmdLine && strlen(lpCmdLine)) ? 2 : 1;
-    const char *argv[] = { "", lpCmdLine };
+    //int argc = (lpCmdLine && strlen(lpCmdLine)) ? 2 : 1;
+    //const char *argv[] = { "", lpCmdLine };
+    ArgVector av;
+    int argc = av.argc();
+    char** argv = av.argv();
 #endif
     cacheDir[0] = saveDir[0] = contentDir[0] = 0;
 
@@ -1005,7 +1064,10 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     strcpy(saveDir, cacheDir);
     CreateDirectory(cacheDir, NULL);
 
-    RECT r = { 0, 0, 1280, 720 };
+    int argw = 1280;
+    int argh = 720;
+    argWindowSize<int>(argc, argv, &argw, &argh);
+    RECT r = { 0, 0, argw, argh };
 
     int sw = GetSystemMetrics(SM_CXSCREEN);
     int sh = GetSystemMetrics(SM_CYSCREEN);
@@ -1076,6 +1138,22 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
     ContextCreate();
 
+    if (argFullscreen(argc, argv)) {
+        static WINDOWPLACEMENT pLast;
+        DWORD style = GetWindowLong(hWnd, GWL_STYLE);
+        if (style & WS_OVERLAPPEDWINDOW) {
+            MONITORINFO mInfo = { sizeof(mInfo) };
+            if (GetWindowPlacement(hWnd, &pLast) && GetMonitorInfo(MonitorFromWindow(hWnd, MONITOR_DEFAULTTOPRIMARY), &mInfo)) {
+                RECT &r = mInfo.rcMonitor;
+                SetWindowLong(hWnd, GWL_STYLE, style & ~WS_OVERLAPPEDWINDOW);
+                MoveWindow(hWnd, r.left, r.top, r.right - r.left, r.bottom - r.top, FALSE);
+            }
+        } else {
+            SetWindowLong(hWnd, GWL_STYLE, style | WS_OVERLAPPEDWINDOW);
+            SetWindowPlacement(hWnd, &pLast);
+        }
+    }
+
     Sound::channelsCount = 0;
 
     osStartTime = Core::getTime();
@@ -1085,8 +1163,8 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     sndInit(hWnd);
 
     Core::defLang = checkLanguage();
-
-    Game::init((argc > 1 && strstr(argv[1], "--") != argv[1]) ? argv[1] : NULL);
+    int levelNameArg = argLevelName(argc, argv);
+    Game::init(levelNameArg > 0 ? argv[levelNameArg] : NULL);
 
     if (Core::isQuit) {
         MessageBoxA(hWnd, "Please check the readme file first!", "Game resources not found", MB_ICONHAND);
