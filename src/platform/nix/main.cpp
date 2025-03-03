@@ -501,7 +501,7 @@ int main(int argc, char **argv) {
 
     unsigned int wnd_width = 1280;
     unsigned int wnd_height = 720;
-    argWindowSize(argc, argv, &wnd_width, &wnd_height);
+    argWindowSize<unsigned int>(argc, argv, &wnd_width, &wnd_height);
 
     Window wnd = XCreateWindow(dpy, RootWindow(dpy, vis->screen),
                                0, 0, wnd_width, wnd_height, 0,
