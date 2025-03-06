@@ -1019,13 +1019,13 @@ public:
                 0,
                 wargv[i],
                 -1,
-                sargv[i].data(),
+                LPSTR(sargv[i].data()),
                 len,
                 0,
                 0
             );
 
-            pargv[i] = sargv[i].data();
+            pargv[i] = LPSTR(sargv[i].data());
         }
     }
 
